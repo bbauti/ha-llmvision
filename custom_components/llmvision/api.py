@@ -6,7 +6,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.http import HomeAssistantView
 from homeassistant.helpers.json import json_dumps
 from homeassistant.util import dt as dt_util
-from .calendar import Timeline
+from .timeline import get_timeline
 from .const import DOMAIN, CONF_PROVIDER, SIGNAL_TIMELINE_UPDATED
 
 _LOGGER = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ class TimelineEventsView(HomeAssistantView):
                 start = start_date.isoformat()
                 end = end_date.isoformat()
 
-        timeline = Timeline(hass, settings_entry)
+        timeline = get_timeline(hass, settings_entry)
         events = await timeline.get_events_json(
             limit=limit,
             cameras=cameras,
@@ -160,7 +160,7 @@ class TimelineEventCreateView(HomeAssistantView):
         start = _parse_time(data.get("start")) or dt_util.now()
         end = _parse_time(data.get("end")) or (start + timedelta(minutes=1))
 
-        timeline = Timeline(hass, settings_entry)
+        timeline = get_timeline(hass, settings_entry)
         try:
             await timeline.create_event(
                 start=start,
@@ -200,7 +200,7 @@ class TimelineEventView(HomeAssistantView):
         settings_entry = await async_get_settings_entry(hass)
         if settings_entry is None:
             return self.json_message("Settings config entry not found", status_code=404)
-        timeline = Timeline(hass, settings_entry)
+        timeline = get_timeline(hass, settings_entry)
         event: Optional[dict[str, Any]] = await timeline.get_event(event_id)
         if event is None:
             return self.json_message("Event not found", status_code=404)
@@ -211,7 +211,7 @@ class TimelineEventView(HomeAssistantView):
         settings_entry = await async_get_settings_entry(hass)
         if settings_entry is None:
             return self.json_message("Settings config entry not found", status_code=404)
-        timeline = Timeline(hass, settings_entry)
+        timeline = get_timeline(hass, settings_entry)
         try:
             await timeline.delete_event(event_id)
         except Exception as e:
@@ -232,7 +232,7 @@ class TimelineEventView(HomeAssistantView):
         except Exception:
             return self.json_message("Invalid JSON body", status_code=400)
 
-        timeline = Timeline(hass, settings_entry)
+        timeline = get_timeline(hass, settings_entry)
 
         # Ensure the event exists
         try:

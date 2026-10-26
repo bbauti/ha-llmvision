@@ -190,8 +190,10 @@ class TestEntryLifecycle:
         timeline_instance._cleanup = AsyncMock()
 
         with patch(
-            "custom_components.llmvision.Timeline", return_value=timeline_instance
-        ):
+            "custom_components.llmvision.get_timeline", return_value=timeline_instance
+        ), patch(
+            "custom_components.llmvision.async_track_time_interval"
+        ) as track_interval:
             ok = await async_setup_entry(hass, entry)
 
         assert ok is True
@@ -199,6 +201,9 @@ class TestEntryLifecycle:
             entry, ["calendar"]
         )
         timeline_instance._cleanup.assert_awaited_once()
+        # Cleanup keeps running periodically and stops when the entry unloads
+        track_interval.assert_called_once()
+        entry.async_on_unload.assert_called_once_with(track_interval.return_value)
 
     @pytest.mark.anyio
     async def test_async_remove_entry_non_settings(self):
@@ -458,7 +463,7 @@ class TestCreateEventAndUpdateSensor:
             "structured_response": {"summary": "from json"},
         }
 
-        with patch("custom_components.llmvision.Timeline", return_value=timeline):
+        with patch("custom_components.llmvision.get_timeline", return_value=timeline):
             await _create_event(
                 hass, call, datetime.datetime.now(), response, "frame.jpg"
             )
@@ -673,7 +678,7 @@ class TestSetupServices:
 
         with (
             patch("custom_components.llmvision.ServiceCallData", return_value=call_obj),
-            patch("custom_components.llmvision.Timeline", return_value=timeline),
+            patch("custom_components.llmvision.get_timeline", return_value=timeline),
         ):
             await handlers["create_event"](_build_data_call(_base_service_data()))
             result = await handlers["get_events"](

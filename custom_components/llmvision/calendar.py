@@ -10,14 +10,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.config_entries import ConfigEntry
 from .const import SIGNAL_TIMELINE_UPDATED
-from .timeline import Timeline
+from .timeline import get_timeline
 import logging
 
 _LOGGER = logging.getLogger(__name__)
 
-# Timeline writes can arrive in rapid bursts (one per analysed camera event) and
-# every refresh reloads the full events DB. Coalesce bursts into a single reload
-# after this quiet period instead of forcing one full reload per event.
+# Timeline writes can arrive in rapid bursts (one per analysed camera event).
+# Coalesce bursts into a single state refresh after this quiet period.
 REFRESH_COOLDOWN_SECONDS = 1.5
 
 
@@ -29,7 +28,7 @@ class Calendar(CalendarEntity):
         self.hass = hass
         self._attr_name = "LLM Vision Timeline"
         self._attr_unique_id = "llm_vision_timeline"
-        self.timeline = Timeline(hass, config_entry=config_entry)
+        self.timeline = get_timeline(hass, config_entry)
         self._events = []
         self._current_event = None
         self._attr_supported_features = CalendarEntityFeature.DELETE_EVENT
@@ -119,8 +118,7 @@ class Calendar(CalendarEntity):
         }
 
     async def async_update(self) -> None:
-        """Loads events from database"""
-        await self.timeline.load_events()
+        """Refreshes events from the timeline (kept in sync with the DB by its writes)"""
         events = await self.timeline.get_all_events()
         calendar_events: list[CalendarEvent] = []
         for event in events:
@@ -152,7 +150,6 @@ class Calendar(CalendarEntity):
         end_date: datetime.datetime,
     ) -> list[CalendarEvent]:
         """Returns calendar events within a datetime range"""
-        await self.timeline.load_events()
         timeline_events = await self.timeline.get_all_events()
         calendar_events: list[CalendarEvent] = []
 

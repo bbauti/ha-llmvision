@@ -1,5 +1,5 @@
 from datetime import datetime
-from .timeline import Timeline
+from .timeline import Timeline, TIMELINE_KEY, get_timeline
 from .providers import Request
 from .memory import Memory
 from .media_handlers import MediaProcessor
@@ -11,6 +11,7 @@ from homeassistant.core import SupportsResponse
 from homeassistant.exceptions import ServiceValidationError
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_track_time_interval
 from .api import TimelineEventView, TimelineEventsView, TimelineEventCreateView
 
 import logging
@@ -141,9 +142,19 @@ async def async_setup_entry(hass, entry):
 
     # If this is the Settings entry, set up the calendar and run cleanup
     if filtered_provider_config.get(CONF_PROVIDER) == "Settings":
+        # A reloaded settings entry (e.g. new retention time) gets a fresh Timeline
+        hass.data.pop(TIMELINE_KEY, None)
+        timeline = get_timeline(hass, entry)
         await hass.config_entries.async_forward_entry_setups(entry, ["calendar"])
-        timeline = Timeline(hass, entry)
         await timeline._cleanup()
+
+        async def _periodic_cleanup(_now) -> None:
+            await timeline._cleanup()
+
+        # Cleanup used to run whenever a Timeline was built (on every service call)
+        entry.async_on_unload(
+            async_track_time_interval(hass, _periodic_cleanup, timedelta(minutes=30))
+        )
 
     # Sanitize provider config (remove api_key and value)
     sanitized_provider_config = {
@@ -183,6 +194,7 @@ async def async_unload_entry(hass, entry) -> bool:
         unload_ok = await hass.config_entries.async_unload_platforms(
             entry, ["calendar"]
         )
+        hass.data.pop(TIMELINE_KEY, None)
     else:
         unload_ok = True
     return unload_ok
@@ -569,7 +581,7 @@ async def _create_event(
                 f"Settings config entry not found. Please set up LLM Vision first."
             )
 
-        timeline = Timeline(hass, config_entry)
+        timeline = get_timeline(hass, config_entry)
 
         image_entities = call.get("image_entities") or []
         video_paths = call.get("video_paths") or []
@@ -895,7 +907,7 @@ def setup(hass, config):
                 f"Config entry not found. Please create the 'Settings' config entry first."
             )
 
-        timeline: Timeline = Timeline(hass, config_entry)
+        timeline: Timeline = get_timeline(hass, config_entry)
 
         await timeline.create_event(
             start=call.start_time,
@@ -923,7 +935,7 @@ def setup(hass, config):
                 f"Config entry not found. Please create the 'Settings' config entry first."
             )
 
-        timeline: Timeline = Timeline(hass, config_entry)
+        timeline: Timeline = get_timeline(hass, config_entry)
         events: list[dict] | None = await timeline.get_events_json(
             start=data_call.data.get("start"),
             end=data_call.data.get("end"),

@@ -16,6 +16,9 @@ _LOGGER = logging.getLogger(__name__)
 
 DB_VERSION = 4
 
+# hass.data key for the shared Timeline (hass.data[DOMAIN] only holds provider configs)
+TIMELINE_KEY = f"{DOMAIN}_timeline"
+
 
 async def _get_category_and_label(
     hass: HomeAssistant, config_entry: ConfigEntry, query: str
@@ -196,6 +199,20 @@ class Event:
         return self.__repr__()
 
 
+def get_timeline(hass: HomeAssistant, config_entry: ConfigEntry) -> "Timeline":
+    """Returns the shared Timeline for the settings entry.
+
+    Building a Timeline initializes and migrates the DB, reloads every event and runs a
+    cleanup, so services, API views and the calendar reuse one instance instead of
+    creating one per call.
+    """
+    timeline = hass.data.get(TIMELINE_KEY)
+    if timeline is None or timeline._config_entry.entry_id != config_entry.entry_id:
+        timeline = Timeline(hass, config_entry)
+        hass.data[TIMELINE_KEY] = timeline
+    return timeline
+
+
 class Timeline:
     """Representation of a Calendar."""
 
@@ -211,6 +228,9 @@ class Timeline:
         self._cleanup_lock = asyncio.Lock()
         self._config_entry = config_entry
         self._migrating = True
+        # self.events mirrors the DB once loaded; writes update it in place
+        self._loaded = False
+        self._events_lock = asyncio.Lock()
 
         # Path to the JSON file where events are stored
         self._db_path = os.path.join(self.hass.config.path("llmvision"), "events.db")
@@ -501,6 +521,8 @@ class Timeline:
             # Mark migration complete by setting user_version
             await self._set_db_version(DB_VERSION)
             _LOGGER.info(f"DB migration complete (user_version={DB_VERSION})")
+            # The initial load may have read rows before they were migrated
+            await self.load_events()
         finally:
             self._migrating = False
             try:
@@ -576,6 +598,10 @@ class Timeline:
                     len(stale_rows),
                     retention_days,
                 )
+
+            stale_uids = {row[0] for row in stale_rows}
+            async with self._events_lock:
+                self.events = [e for e in self.events if e.uid not in stale_uids]
         except aiosqlite.Error as e:
             _LOGGER.error(f"Error purging expired timeline events: {e}")
 
@@ -585,7 +611,9 @@ class Timeline:
 
     async def get_linked_images(self):
         """Returns the filenames of key_frames associated with events"""
-        await self.load_events()
+        if not self._loaded:
+            # Never decide which snapshots are orphaned from an empty, not yet loaded list
+            await self.load_events()
         return [
             os.path.basename(e.key_frame)
             for e in self.events
@@ -595,7 +623,11 @@ class Timeline:
     async def load_events(self):
         """Loads events from the database into memory"""
         await self._purge_expired_events()
-        self.events = []
+        async with self._events_lock:
+            await self._load_events_locked()
+
+    async def _load_events_locked(self) -> None:
+        events: list[Event] = []
         try:
             async with aiosqlite.connect(self._db_path) as db:
                 async with db.execute("""
@@ -632,17 +664,23 @@ class Timeline:
                             camera_name=row[7],
                             label=row[8],
                         )
-                        self.events.append(event)
+                        events.append(event)
         except aiosqlite.Error as e:
             _LOGGER.error(f"Error loading events from database: {e}")
+            return
+        self.events = events
+        self._loaded = True
 
     async def get_all_events(self) -> list[Event]:
         """Returns calendar events"""
+        if not self._loaded:
+            await self.load_events()
         return self.events
 
     async def get_event(self, uid: str) -> dict | None:
         """Returns a single event by UID as a dict. Used by the API."""
-        await self.load_events()
+        if not self._loaded:
+            await self.load_events()
         for event in self.events:
             if event.uid == uid:
                 # return event as dict
@@ -847,6 +885,9 @@ class Timeline:
                 if pending_name:
                     self._pending_key_frames.discard(pending_name)
 
+        # Snapshots of analyses that were not stored are removed here (after the grace period)
+        self.hass.async_create_task(self._cleanup())
+
     async def _insert_event(self, event: Event) -> None:
         """Inserts a new event into the database"""
         try:
@@ -872,9 +913,20 @@ class Timeline:
                     ),
                 )
                 await db.commit()
-                await self.load_events()
         except aiosqlite.Error as e:
             _LOGGER.error(f"Error inserting event into database: {e}")
+            return
+        await self._store_in_memory(event)
+
+    async def _store_in_memory(self, event: Event) -> None:
+        """Adds or replaces an event in self.events instead of reloading the whole table."""
+        # Checked under the lock: a load in progress either already read the committed
+        # row, or finishes first and the event is appended here
+        async with self._events_lock:
+            if not self._loaded:
+                # The pending initial load reads it from the DB
+                return
+            self.events = [e for e in self.events if e.uid != event.uid] + [event]
 
     async def update_event(
         self,
@@ -888,8 +940,6 @@ class Timeline:
         label: str,
     ) -> None:
         """Updates an existing event in the calendar."""
-        await self.load_events()
-
         # Ensure dtstart and dtend are datetime objects
         if isinstance(start, str):
             start = datetime.datetime.fromisoformat(start)
@@ -898,11 +948,12 @@ class Timeline:
 
         start = dt_util.as_local(start)
         end = dt_util.as_local(end)
+        category = await self._get_category_from_label(label)
 
         try:
             async with aiosqlite.connect(self._db_path) as db:
                 _LOGGER.info(f"Updating event with UID {uid}")
-                await db.execute(
+                cursor = await db.execute(
                     """
                     UPDATE events
                     SET title = ?, start = ?, end = ?, description = ?, key_frame = ?, camera_name = ?, category = ?, label = ?
@@ -915,15 +966,31 @@ class Timeline:
                         description,
                         key_frame,
                         camera_name,
-                        await self._get_category_from_label(label),
+                        category,
                         label,
                         uid,
                     ),
                 )
                 await db.commit()
-                await self.load_events()
+                if cursor.rowcount == 0:
+                    _LOGGER.warning(f"Event with UID {uid} no longer exists")
+                    return
         except aiosqlite.Error as e:
             _LOGGER.error(f"Error updating event in database: {e}")
+            return
+        await self._store_in_memory(
+            Event(
+                uid=uid,
+                title=title,
+                start=self._ensure_datetime(start),
+                end=self._ensure_datetime(end),
+                description=description,
+                key_frame=key_frame,
+                camera_name=camera_name,
+                category=category,
+                label=label,
+            )
+        )
 
     async def delete_event(
         self,
@@ -963,6 +1030,9 @@ class Timeline:
 
         success_image = await _delete_image(uid)
         success_event = await _delete_event_from_db(uid)
+        if success_event:
+            async with self._events_lock:
+                self.events = [e for e in self.events if e.uid != uid]
         return success_image and success_event
 
     async def _cleanup(self):
@@ -978,11 +1048,17 @@ class Timeline:
 
         GRACE_SECONDS = 30
 
+        # Expired events used to be purged by the reload after every write
+        await self._purge_expired_events()
+
         async with self._cleanup_lock:
             linked_frames = {
                 (os.path.basename(n) or "").lower()
                 for n in await self.get_linked_images()
             }
+            if not self._loaded:
+                # Events could not be read: treat every snapshot as possibly linked
+                return
 
             # List files in snapshots dir (in executor, non-blocking)
             try:

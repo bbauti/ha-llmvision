@@ -89,7 +89,7 @@ class TestTimelineEventsView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline), patch(
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline), patch(
             "custom_components.llmvision.api.dt_util.now", return_value=now
         ):
             response = await TimelineEventsView().get(request)
@@ -123,7 +123,7 @@ class TestTimelineEventsView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventsView().get(request)
 
         assert response.status == 200
@@ -181,7 +181,7 @@ class TestTimelineEventCreateView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline), patch(
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline), patch(
             "custom_components.llmvision.api.dt_util.now", return_value=now
         ):
             response = await TimelineEventCreateView().post(request)
@@ -215,7 +215,7 @@ class TestTimelineEventCreateView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventCreateView().post(request)
 
         assert response.status == 200
@@ -238,7 +238,7 @@ class TestTimelineEventCreateView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline), patch(
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline), patch(
             "custom_components.llmvision.api.dt_util.parse_datetime", return_value=None
         ):
             response = await TimelineEventCreateView().post(request)
@@ -265,7 +265,7 @@ class TestTimelineEventCreateView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventCreateView().post(request)
 
         assert response.status == 200
@@ -282,7 +282,7 @@ class TestTimelineEventCreateView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventCreateView().post(request)
 
         assert response.status == 500
@@ -310,7 +310,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().get(request, "event-1")
 
         assert response.status == 200
@@ -325,7 +325,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().get(request, "missing")
 
         assert response.status == 404
@@ -340,7 +340,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().delete(request, "event-1")
 
         assert response.status == 200
@@ -364,7 +364,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().delete(request, "event-1")
 
         assert response.status == 500
@@ -397,7 +397,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().post(request, "event-1")
 
         assert response.status == 200
@@ -440,7 +440,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().post(request, "event-1")
 
         assert response.status == 200
@@ -474,7 +474,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().post(request, "event-1")
 
         assert response.status == 200
@@ -504,7 +504,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().post(request, "event-1")
 
         assert response.status == 500
@@ -519,7 +519,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().post(request, "event-1")
 
         assert response.status == 404
@@ -547,7 +547,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().post(request, "event-1")
 
         assert response.status == 400
@@ -573,7 +573,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().post(request, "event-1")
 
         assert response.status == 500
@@ -598,7 +598,7 @@ class TestTimelineEventView:
         with patch(
             "custom_components.llmvision.api.async_get_settings_entry",
             new=AsyncMock(return_value=mock_config_entry),
-        ), patch("custom_components.llmvision.api.Timeline", return_value=timeline):
+        ), patch("custom_components.llmvision.api.get_timeline", return_value=timeline):
             response = await TimelineEventView().post(request, "event-1")
 
         assert response.status == 200

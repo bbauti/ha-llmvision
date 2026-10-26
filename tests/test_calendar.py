@@ -34,7 +34,7 @@ class TestCalendar:
         """Create a Calendar instance with mocked dependencies."""
         from custom_components.llmvision.calendar import Calendar
 
-        with patch('custom_components.llmvision.calendar.Timeline', return_value=mock_timeline):
+        with patch('custom_components.llmvision.calendar.get_timeline', return_value=mock_timeline):
             with patch('os.makedirs'):
                 with patch('os.path.join', return_value="/mock/path"):
                     calendar = Calendar(mock_hass, mock_config_entry)
@@ -296,7 +296,7 @@ class TestCalendarAdvanced:
         """Create a Calendar instance with events."""
         from custom_components.llmvision.calendar import Calendar
         
-        with patch('custom_components.llmvision.calendar.Timeline', return_value=mock_timeline_with_events):
+        with patch('custom_components.llmvision.calendar.get_timeline', return_value=mock_timeline_with_events):
             with patch('os.makedirs'):
                 with patch('os.path.join', return_value="/mock/path"):
                     calendar = Calendar(mock_hass, mock_config_entry)
@@ -332,7 +332,7 @@ class TestCalendarAdvanced:
         mock_hass = Mock()
         mock_config_entry = Mock()
         
-        with patch('custom_components.llmvision.calendar.Timeline'):
+        with patch('custom_components.llmvision.calendar.get_timeline'):
             with patch('os.makedirs'):
                 with patch('os.path.join', return_value="/mock/path"):
                     calendar = Calendar(mock_hass, mock_config_entry)
